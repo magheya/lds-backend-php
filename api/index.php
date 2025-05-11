@@ -4,8 +4,29 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
+// At the top of your index.php file
+// Set allowed origins
+$allowedOrigins = [
+    'http://localhost:8000',    // Your frontend dev server
+    'http://localhost:3000',    // Alternative frontend port
+    'http://127.0.0.1:8000',    // Alternative localhost notation
+    'http://127.0.0.1:3000',
+    'https://yourdomain.com'    // Add your production domain
+];
+
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+if (in_array($origin, $allowedOrigins)) {
+    header("Access-Control-Allow-Origin: $origin");
+    header('Access-Control-Allow-Credentials: true');
+} else {
+    // Default for requests without origin (like Postman)
+    // Note: Using * won't work with credentials
+    header('Access-Control-Allow-Origin: *');
+}
+
+// Add these additional headers
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 

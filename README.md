@@ -4,10 +4,18 @@ This documentation provides comprehensive information about the Site Association
 
 ## Table of Contents
 - [Overview](#overview)
+- [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Database Schema](#database-schema)
+  - [Using Apache (XAMPP/WAMP)](#using-apache-xamppwamp)
+  - [Using PHP Built-in Server](#using-php-built-in-server)
+  - [Environment Setup](#environment-setup)
+- [Database Setup](#database-setup)
+  - [Database Schema](#database-schema)
+  - [Seeding Test Data](#seeding-test-data)
 - [Authentication](#authentication)
+  - [Token-Based Authentication](#token-based-authentication)
+  - [Admin User Management](#admin-user-management)
 - [API Endpoints](#api-endpoints)
   - [Products](#products)
   - [Events](#events)
@@ -18,39 +26,130 @@ This documentation provides comprehensive information about the Site Association
   - [Activities](#activities)
 - [Error Handling](#error-handling)
 - [File Uploads](#file-uploads)
-- [Frontend Integration Examples](#frontend-integration-examples)
-- [Testing with Postman](#testing-with-postman)
-- [Security Considerations](#security-considerations)
+- [Frontend Integration](#frontend-integration)
+  - [JavaScript Examples](#javascript-examples)
+  - [CORS Configuration](#cors-configuration)
+- [Testing](#testing)
+  - [Using Postman](#using-postman)
+  - [API Debugging](#api-debugging)
+- [Deployment](#deployment)
+  - [Production Considerations](#production-considerations)
+  - [Security Best Practices](#security-best-practices)
 - [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Overview
 
-This API serves as the backend for the Site Association project, providing endpoints for managing products, events, registrations, donations, messages, and orders. It includes authentication for admin-only endpoints and handles file uploads for images.
+This API serves as the backend for the Site Association project, providing endpoints for managing products, events, registrations, donations, messages, and orders. It includes token-based authentication for admin-only endpoints and handles file uploads for images.
+
+The API is built with pure PHP (no framework) and uses SQLite for data storage, making it easy to deploy without complex database setup. It follows RESTful principles and is designed to be integrated with JavaScript frontends.
+
+## Project Structure
+
+The project follows a simple structure:
+
+```
+lds-backend-php/
+├── api/                    # API core files
+│   ├── auth.php            # Authentication logic
+│   ├── data-access.php     # Database operations
+│   ├── database.php        # Database connection
+│   ├── index.php           # Main API entry point
+│   ├── init.php            # Database initialization
+│   ├── upload-handler.php  # File upload handling
+│   └── logs/               # Request and error logs
+├── assets/                 # Static assets
+│   └── uploads/            # Uploaded files (images)
+├── db/                     # Database files
+│   └── association.db      # SQLite database
+├── README.md               # Documentation
+└── seed.php                # Database seeding script
+```
 
 ## Prerequisites
 
-- PHP 7.4+
-- SQLite with PHP PDO extension
-- Apache or Nginx web server
+- PHP 7.4 or higher
+- SQLite with PHP PDO extension enabled
+- PHP GD library (for image processing)
+- Apache or Nginx web server (optional, can use PHP built-in server)
 - Write permissions for the web server on `db` and `assets/uploads` directories
+
+### Required PHP Extensions
+
+- PDO and PDO_SQLite
+- GD (for image processing)
+- JSON
+- FileInfo
 
 ## Installation
 
-1. Clone or download this repository to your web server directory.
-2. Configure your web server to point to this directory.
-3. Make sure the web server user has write permissions for `db` and `assets/uploads` directories.
+### Using Apache (XAMPP/WAMP)
+
+1. Clone or download this repository to your web server directory:
+   ```bash
+   git clone https://github.com/yourusername/lds-backend-php.git
+   ```
+   
+   For XAMPP: `C:\xampp\htdocs\lds-backend-php`
+   For WAMP: `C:\wamp\www\lds-backend-php`
+
+2. Make sure the web server user has write permissions for `db` and `assets/uploads` directories:
    
    ```bash
+   # Linux/macOS
    chmod -R 755 .
    chmod -R 777 db assets/uploads
+   
+   # Windows (via PowerShell with admin rights)
+   icacls "db" /grant "Everyone:(OI)(CI)F" /T
+   icacls "assets\uploads" /grant "Everyone:(OI)(CI)F" /T
    ```
 
-4. The database will be automatically initialized on the first request to the API.
-5. A default admin user will be created with:
+3. Access the API via: `http://localhost/lds-backend-php/api/`
+
+### Using PHP Built-in Server
+
+You can run the API using PHP's built-in web server for development purposes:
+
+1. Navigate to the project directory:
+   ```bash
+   cd path/to/lds-backend-php
+   ```
+
+2. Start the PHP built-in server:
+   ```bash
+   # Linux/macOS
+   php -S localhost:8080 -t .
+   
+   # Windows
+   php -S localhost:8080 -t .
+   ```
+
+3. Access the API via: `http://localhost:8080/api/`
+
+### Environment Setup
+
+1. The database will be automatically initialized on the first request to the API.
+
+2. A default admin user will be created with:
    - Username: `admin`
    - Password: `admin123`
 
-## Database Schema
+3. You can seed the database with test data by running:
+   ```bash
+   # Linux/macOS
+   php seed.php
+   
+   # Windows
+   php seed.php
+   ```
+
+## Database Setup
+
+The application uses SQLite which doesn't require a separate database server. The database file will be created automatically in the `db` directory.
+
+### Database Schema
 
 The API uses SQLite and automatically creates the following tables:
 
@@ -63,12 +162,33 @@ The API uses SQLite and automatically creates the following tables:
 - **orders**: Stores order information
 - **order_items**: Stores individual items within orders
 - **admins**: Stores admin user information
+- **auth_tokens**: Stores authentication tokens for admin users
+
+You can view the complete schema in the `init.php` file, which contains all the table creation statements.
+
+### Seeding Test Data
+
+To populate the database with sample data for testing, run the seeding script:
+
+```bash
+# Linux/macOS
+php seed.php
+
+# Windows
+php seed.php
+```
+
+This will create sample products, events, registrations, donations, messages, and orders in the database. The script is designed to be idempotent, so it won't duplicate data if run multiple times.
 
 ## Authentication
 
-The API uses session-based token authentication for admin-only endpoints.
+The API uses token-based authentication to protect admin endpoints.
 
-### Login
+### Token-Based Authentication
+
+Authentication is implemented using secure tokens that are stored in the database and validated on each request to a protected endpoint.
+
+#### Login
 
 ```
 POST /api/admin/login
@@ -85,13 +205,15 @@ POST /api/admin/login
 **Response**:
 ```json
 {
+    "user_id": 1,
     "username": "admin",
     "role": "admin",
-    "token": "your_token_here"
+    "token": "your_token_here",
+    "expires_at": "2025-05-12 15:30:45"
 }
 ```
 
-### Using Authentication in Requests
+#### Using Authentication in Requests
 
 For endpoints that require admin access, include the token in the Authorization header:
 
@@ -99,149 +221,301 @@ For endpoints that require admin access, include the token in the Authorization 
 Authorization: Bearer your_token_here
 ```
 
-## API Endpoints
+#### Token Expiration
 
-### Products
+Tokens automatically expire after 24 hours. You can modify the expiration time in the `auth.php` file by changing the `$tokenExpiration` property.
 
-#### List All Products
+### Admin User Management
 
-```
-GET /api/products
-```
+The initial admin user is created automatically. Currently, admin user management is handled directly in the database. In a future update, endpoints for admin user management will be added.
 
-**Response**:
-```json
-[
-    {
-        "id": 1,
-        "name": "T-Shirt",
-        "description": "Cotton t-shirt with logo",
-        "price": 19.99,
-        "image": "t-shirt.jpg",
-        "sizes": ["S", "M", "L", "XL"],
-        "created_at": "2023-06-15 10:30:45"
-    },
-    {
-        "id": 2,
-        "name": "Water Bottle",
-        "description": "Stainless steel water bottle",
-        "price": 24.99,
-        "image": "bottle.jpg",
-        "sizes": [],
-        "created_at": "2023-06-15 11:45:22"
-    }
-]
-```
+## Error Handling
 
-#### Get Product by ID
+The API uses consistent error response structures to make error handling on the client side easier.
 
-```
-GET /api/products/{id}
-```
+### Error Response Format
 
-**Response**:
 ```json
 {
-    "id": 1,
-    "name": "T-Shirt",
-    "description": "Cotton t-shirt with logo",
-    "price": 19.99,
-    "image": "t-shirt.jpg",
-    "sizes": ["S", "M", "L", "XL"],
-    "created_at": "2023-06-15 10:30:45"
+    "error": true,
+    "message": "Error message describing the problem",
+    "code": 400
 }
 ```
 
-#### Create Product (Admin only)
+### Common HTTP Status Codes
+
+- **200 OK**: The request was successful
+- **201 Created**: Resource successfully created
+- **400 Bad Request**: Invalid input or missing required fields
+- **401 Unauthorized**: Authentication required or authentication failed
+- **403 Forbidden**: Authentication successful but insufficient permissions
+- **404 Not Found**: Resource not found
+- **405 Method Not Allowed**: HTTP method not supported for this endpoint
+- **500 Internal Server Error**: Server-side error
+
+### Debugging Errors
+
+The API writes detailed logs to the `api/logs/` directory, which can be used to debug issues. The logs include information about requests, responses, and any errors that occur.
+
+## File Uploads
+
+The API supports file uploads for product and event images. Files are stored in the `assets/uploads/` directory and the filename is stored in the database.
+
+### Upload Endpoints
+
+File uploads are handled as part of creating or updating products and events. Use `multipart/form-data` as the content type when uploading files.
 
 ```
 POST /api/admin/products
-```
-
-**Headers**:
-```
-Authorization: Bearer your_token_here
-Content-Type: application/json
-```
-
-**Request Body**:
-```json
-{
-    "name": "Hoodie",
-    "description": "Warm hoodie with logo",
-    "price": 39.99,
-    "image": "hoodie.jpg",
-    "sizes": ["S", "M", "L", "XL", "XXL"]
-}
-```
-
-**Response**:
-```json
-{
-    "id": 3,
-    "name": "Hoodie",
-    "description": "Warm hoodie with logo",
-    "price": 39.99,
-    "image": "hoodie.jpg",
-    "sizes": ["S", "M", "L", "XL", "XXL"],
-    "created_at": "2023-06-15 14:22:10"
-}
-```
-
-#### Update Product (Admin only)
-
-```
 PUT /api/admin/products/{id}
+POST /api/admin/events
+PUT /api/admin/events/{id}
 ```
 
-**Headers**:
-```
-Authorization: Bearer your_token_here
-Content-Type: application/json
-```
+### Upload Limits
 
-**Request Body**:
-```json
-{
-    "name": "Premium Hoodie",
-    "description": "Warm hoodie with embroidered logo",
-    "price": 44.99,
-    "image": "hoodie.jpg",
-    "sizes": ["S", "M", "L", "XL", "XXL"]
+The default upload size limit is determined by your PHP configuration (`upload_max_filesize` and `post_max_size` in php.ini). The API accepts only image files with the following extensions: jpg, jpeg, png, gif.
+
+## Frontend Integration
+
+### JavaScript Examples
+
+#### Fetching Products
+
+```javascript
+async function fetchProducts() {
+    try {
+        const response = await fetch('http://localhost:8080/api/products');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const products = await response.json();
+        return products;
+    } catch (error) {
+        console.error('Error fetching products:', error);
+        throw error;
+    }
 }
 ```
 
-**Response**:
-```json
-{
-    "id": 3,
-    "name": "Premium Hoodie",
-    "description": "Warm hoodie with embroidered logo",
-    "price": 44.99,
-    "image": "hoodie.jpg",
-    "sizes": ["S", "M", "L", "XL", "XXL"],
-    "updated_at": "2023-06-15 15:10:45"
+#### Admin Authentication
+
+```javascript
+// Login function
+async function login(username, password) {
+    try {
+        const response = await fetch('http://localhost:8080/api/admin/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Store token in localStorage
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('userData', JSON.stringify({
+            username: data.username,
+            role: data.role,
+            expiresAt: data.expires_at
+        }));
+        
+        return data;
+    } catch (error) {
+        console.error('Login error:', error);
+        throw error;
+    }
+}
+
+// Function for authenticated API calls
+async function fetchWithAuth(url, options = {}) {
+    const token = localStorage.getItem('authToken');
+    
+    if (!token) {
+        throw new Error('No authentication token found');
+    }
+    
+    const authOptions = {
+        ...options,
+        headers: {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`
+        }
+    };
+    
+    return fetch(url, authOptions);
 }
 ```
 
-#### Delete Product (Admin only)
+#### Creating an Order
 
-```
-DELETE /api/admin/products/{id}
+```javascript
+async function createOrder(orderData) {
+    try {
+        const response = await fetch('http://localhost:8080/api/orders', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error creating order:', error);
+        throw error;
+    }
+}
+
+// Example order data
+const orderData = {
+    customer_name: "John Doe",
+    customer_email: "john@example.com",
+    customer_phone: "123-456-7890",
+    shipping_address: "123 Main St, Anytown, USA",
+    payment_method: "credit_card",
+    items: [
+        {
+            product_id: 1,
+            quantity: 2,
+            size: "L"
+        },
+        {
+            product_id: 2,
+            quantity: 1
+        }
+    ]
+};
 ```
 
-**Headers**:
-```
-Authorization: Bearer your_token_here
-```
+#### Uploading Files
 
-**Response**:
-```json
-{
-    "success": true,
-    "message": "Product deleted successfully"
+```javascript
+async function uploadProductWithImage(productData, imageFile) {
+    const formData = new FormData();
+    
+    // Add product data
+    Object.entries(productData).forEach(([key, value]) => {
+        if (key === 'sizes' && Array.isArray(value)) {
+            formData.append('sizes', JSON.stringify(value));
+        } else {
+            formData.append(key, value);
+        }
+    });
+    
+    // Add image file
+    formData.append('image', imageFile);
+    
+    try {
+        const response = await fetchWithAuth('http://localhost:8080/api/admin/products', {
+            method: 'POST',
+            body: formData
+            // No Content-Type header - it will be set automatically with boundary
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error uploading product:', error);
+        throw error;
+    }
 }
 ```
+
+### CORS Configuration
+
+The API includes CORS headers to allow cross-origin requests. The allowed origins are configured in the `index.php` file:
+
+```php
+$allowedOrigins = [
+    'http://localhost:8000',    // Your frontend dev server
+    'http://localhost:3000',    // Alternative frontend port
+    'http://127.0.0.1:8000',    // Alternative localhost notation
+    'http://127.0.0.1:3000',
+    'https://yourdomain.com'    // Add your production domain
+];
+```
+
+If you need to allow requests from additional origins, add them to this array.
+
+## Testing
+
+### Using Postman
+
+A Postman collection file is provided in the repository: `api/LDS_Backend_API.postman_collection.json`. This collection contains pre-configured requests for all API endpoints.
+
+#### Importing the Collection
+
+1. Open Postman
+2. Click on "Import" in the top left
+3. Choose "File" and select the `LDS_Backend_API.postman_collection.json` file
+4. Click "Import"
+
+#### Setting up the Environment
+
+Create a Postman environment with the following variables:
+
+- `baseUrl`: The base URL of your API (e.g., `http://localhost:8080/api` or `http://localhost/lds-backend-php/api`)
+- `adminToken`: This will be automatically set after a successful login
+
+#### Running Tests
+
+1. Run the "Login" request in the Auth folder to get an authentication token
+2. The token will be automatically stored in the `adminToken` environment variable
+3. You can now run other requests that require authentication
+
+### API Debugging
+
+The API includes detailed logging to help with debugging. Logs are stored in the `api/logs/` directory.
+
+To enable additional debug output, you can modify the `debug` property in the `auth.php` file:
+
+```php
+private $debug = true; // Set to false in production
+```
+
+You can also add your own debug statements using:
+
+```php
+error_log('Debug message');
+```
+
+## Deployment
+
+### Production Considerations
+
+When deploying the API to a production environment, consider the following:
+
+1. **Security**: Set appropriate file permissions, use HTTPS, and update the default admin credentials
+2. **Performance**: Consider adding caching for frequently accessed resources
+3. **Logging**: Disable debug logging in production by setting `$debug = false` in `auth.php`
+4. **CORS**: Update the allowed origins in `index.php` to include only your production domains
+
+### Security Best Practices
+
+1. **Change Default Credentials**: Immediately change the default admin username and password
+2. **Use HTTPS**: Configure your web server to use SSL/TLS encryption
+3. **Apply Proper Permissions**: Set restrictive file permissions to prevent unauthorized access
+4. **Regular Updates**: Keep PHP and all extensions up to date
+5. **Input Validation**: The API includes input validation, but additional validation on the frontend is recommended
+6. **Rate Limiting**: Consider implementing rate limiting for public endpoints
+7. **Secure Headers**: Configure security headers like Content-Security-Policy
 
 ### Registrations
 
